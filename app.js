@@ -1,4 +1,5 @@
 const WEAR_LOW_THRESHOLD = 50;
+const STORAGE_VERSION = 'v2';
 
 let IMAGES = [];
 let PACKAGE_CONFIG = {};
@@ -38,11 +39,15 @@ function getSiteId() {
 }
 
 function storageKey(suffix) {
-    return `prefer_eval_${getSiteId()}_${suffix}`;
+    return `prefer_eval_${STORAGE_VERSION}_${getSiteId()}_${suffix}`;
 }
 
 function emptyRating() {
-    return { like: 50, fit: 50, wear: 50, situation: '', confirmed: false };
+    return { like: null, fit: null, wear: null, situation: '', confirmed: false };
+}
+
+function displayValue(value) {
+    return value === null ? 50 : value;
 }
 
 function currentFileName() {
@@ -85,15 +90,12 @@ function loadProgress() {
         Object.keys(saved).forEach(fileName => {
             if (!ratings[fileName]) return;
             const item = saved[fileName] || {};
-            const like = numberOrNull(item.like);
-            const fit = numberOrNull(item.fit);
-            const wear = numberOrNull(item.wear);
             ratings[fileName] = {
-                like: like === null ? 50 : like,
-                fit: fit === null ? 50 : fit,
-                wear: wear === null ? 50 : wear,
+                like: numberOrNull(item.like),
+                fit: numberOrNull(item.fit),
+                wear: numberOrNull(item.wear),
                 situation: typeof item.situation === 'string' ? item.situation : '',
-                confirmed: item.confirmed === true || (like !== null && fit !== null && wear !== null),
+                confirmed: item.confirmed === true,
             };
         });
     } catch (_) {
@@ -121,7 +123,7 @@ function setVasValue(key, value) {
     const el = vasEls[key];
     const thumb = el.querySelector('.vas-thumb');
     const track = el.querySelector('.vas-track');
-    const shown = value === null ? 50 : value;
+    const shown = displayValue(value);
     thumb.hidden = false;
     thumb.style.left = `${shown}%`;
     track.setAttribute('aria-valuenow', String(Math.round(shown)));
@@ -150,7 +152,7 @@ function applyVasFromEvent(key, clientX) {
 
 function updateSituationVisibility() {
     const rating = getRating(currentFileName());
-    const show = rating.wear < WEAR_LOW_THRESHOLD;
+    const show = rating.wear !== null && rating.wear < WEAR_LOW_THRESHOLD;
     situationCard.hidden = !show;
     if (!show) return;
     if (situationText.value !== rating.situation) situationText.value = rating.situation || '';
@@ -189,7 +191,6 @@ function render() {
     btnNext.textContent = currentIndex === IMAGES.length - 1 ? '完了を確認' : '次の画像 →';
     evalHintEl.hidden = true;
     updateStatistics();
-    scheduleSave();
 }
 
 function updateStatistics() {
@@ -203,7 +204,8 @@ function updateStatistics() {
 
 function validateCurrent() {
     const rating = getRating(currentFileName());
-    if (rating.wear < WEAR_LOW_THRESHOLD && !String(rating.situation || '').trim()) {
+    const wear = displayValue(rating.wear);
+    if (wear < WEAR_LOW_THRESHOLD && !String(rating.situation || '').trim()) {
         return '着用意欲が低い場合は、どういう場面なら着たいかを記入してください';
     }
     return '';
@@ -229,7 +231,7 @@ function setupEventListeners() {
         track.addEventListener('pointercancel', () => { dragging = null; });
         track.addEventListener('keydown', event => {
             const rating = getRating(currentFileName());
-            const current = rating[key] === null ? 50 : rating[key];
+            const current = displayValue(rating[key]);
             let next = current;
             if (event.key === 'ArrowLeft') next = current - 2;
             else if (event.key === 'ArrowRight') next = current + 2;
@@ -265,6 +267,10 @@ function setupEventListeners() {
             return;
         }
         getRating(currentFileName()).confirmed = true;
+        const rating = getRating(currentFileName());
+        if (rating.like === null) rating.like = 50;
+        if (rating.fit === null) rating.fit = 50;
+        if (rating.wear === null) rating.wear = 50;
         scheduleSave();
         updateStatistics();
         if (currentIndex < IMAGES.length - 1) {
@@ -295,9 +301,9 @@ function exportToCSV() {
 
     IMAGES.forEach(img => {
         const rating = getRating(img.fileName);
-        const like = rating.like === null ? '' : rating.like.toFixed(1);
-        const fit = rating.fit === null ? '' : rating.fit.toFixed(1);
-        const wear = rating.wear === null ? '' : rating.wear.toFixed(1);
+        const like = rating.confirmed && rating.like !== null ? rating.like.toFixed(1) : '';
+        const fit = rating.confirmed && rating.fit !== null ? rating.fit.toFixed(1) : '';
+        const wear = rating.confirmed && rating.wear !== null ? rating.wear.toFixed(1) : '';
         const situation = String(rating.situation || '').replace(/"/g, '""');
         csv += `"${img.fileName}",${like},${fit},${wear},"${situation}",${isComplete(rating) ? 'Yes' : 'No'}\n`;
     });
