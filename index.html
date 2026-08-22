@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>服装選好評価</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
+            padding: 24px;
+            color: #1e293b;
+            background: #f8fafc;
+            font-family: system-ui, -apple-system, sans-serif;
+        }
+        main {
+            width: min(640px, 100%);
+            padding: 32px;
+            border: 1px solid #e2e8f0;
+            border-radius: 16px;
+            background: #fff;
+            box-shadow: 0 8px 24px rgb(15 23 42 / 8%);
+        }
+        h1 { margin: 0 0 8px; color: #4f46e5; }
+        p { margin: 0 0 24px; color: #64748b; line-height: 1.6; }
+        nav {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+        a {
+            padding: 28px 16px;
+            border: 1px solid #c7d2fe;
+            border-radius: 12px;
+            color: #4338ca;
+            background: #eef2ff;
+            text-align: center;
+            font-size: 1.2rem;
+            font-weight: 700;
+            text-decoration: none;
+        }
+        a:hover { background: #e0e7ff; }
+        .hint { margin: 24px 0 0; font-size: 0.85rem; }
+        @media (max-width: 520px) {
+            nav { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <h1>服装選好評価</h1>
+        <p>評価するサイトを選んでください。</p>
+        <nav>
+            <a href="./women/">Women を開く</a>
+            <a href="./men/">Men を開く</a>
+        </nav>
+        <p class="hint">進捗はブラウザ内に保存されます。同じURLを同じブラウザで開き直すと続きから再開できます。</p>
+    </main>
+</body>
+</html>

@@ -1,0 +1,14 @@
+{
+  "packages": [
+    {
+      "id": "women",
+      "label": "Women",
+      "image_dir": "data/women_images"
+    },
+    {
+      "id": "men",
+      "label": "Men",
+      "image_dir": "data/men_images"
+    }
+  ]
+}
