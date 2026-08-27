@@ -1,5 +1,6 @@
-const WEAR_LOW_THRESHOLD = 50;
-const STORAGE_VERSION = 'v2';
+const STORAGE_VERSION = 'v3';
+const VAS_KEYS = ['like', 'fit', 'wearDaily', 'wearPure'];
+const DEFAULT_VAS_VALUE = 50;
 
 let IMAGES = [];
 let PACKAGE_CONFIG = {};
@@ -17,8 +18,6 @@ const ratedCountEl = document.getElementById('rated-count');
 const progressFill = document.getElementById('progress-fill');
 const progressText = document.getElementById('progress-text');
 const siteBadgeEl = document.getElementById('site-badge');
-const situationCard = document.getElementById('situation-card');
-const situationText = document.getElementById('situation-text');
 const evalHintEl = document.getElementById('eval-hint');
 const btnPrev = document.getElementById('btn-prev');
 const btnNext = document.getElementById('btn-next');
@@ -28,11 +27,9 @@ const appLoadingEl = document.getElementById('app-loading');
 const appErrorEl = document.getElementById('app-error');
 const appErrorMessageEl = document.getElementById('app-error-message');
 const appContainerEl = document.getElementById('app-container');
-const vasEls = {
-    like: document.querySelector('.vas[data-key="like"]'),
-    fit: document.querySelector('.vas[data-key="fit"]'),
-    wear: document.querySelector('.vas[data-key="wear"]'),
-};
+const vasEls = Object.fromEntries(
+    VAS_KEYS.map(key => [key, document.querySelector(`.vas[data-key="${key}"]`)])
+);
 
 function getSiteId() {
     return PACKAGE_CONFIG.siteId || 'default';
@@ -43,11 +40,17 @@ function storageKey(suffix) {
 }
 
 function emptyRating() {
-    return { like: null, fit: null, wear: null, situation: '', confirmed: false };
+    return {
+        like: null,
+        fit: null,
+        wearDaily: null,
+        wearPure: null,
+        confirmed: false,
+    };
 }
 
 function displayValue(value) {
-    return value === null ? 50 : value;
+    return value === null ? DEFAULT_VAS_VALUE : value;
 }
 
 function currentFileName() {
@@ -60,9 +63,7 @@ function getRating(fileName) {
 }
 
 function isComplete(rating) {
-    if (!rating.confirmed) return false;
-    if (rating.wear < WEAR_LOW_THRESHOLD && !String(rating.situation || '').trim()) return false;
-    return true;
+    return rating.confirmed === true;
 }
 
 function showLoadError(message) {
@@ -93,8 +94,8 @@ function loadProgress() {
             ratings[fileName] = {
                 like: numberOrNull(item.like),
                 fit: numberOrNull(item.fit),
-                wear: numberOrNull(item.wear),
-                situation: typeof item.situation === 'string' ? item.situation : '',
+                wearDaily: numberOrNull(item.wearDaily ?? item.wear),
+                wearPure: numberOrNull(item.wearPure),
                 confirmed: item.confirmed === true,
             };
         });
@@ -121,6 +122,7 @@ function numberOrNull(value) {
 
 function setVasValue(key, value) {
     const el = vasEls[key];
+    if (!el) return;
     const thumb = el.querySelector('.vas-thumb');
     const track = el.querySelector('.vas-track');
     const shown = displayValue(value);
@@ -139,23 +141,10 @@ function valueFromPointer(track, clientX) {
 function applyVasFromEvent(key, clientX) {
     const track = vasEls[key].querySelector('.vas-track');
     const value = valueFromPointer(track, clientX);
-    const rating = getRating(currentFileName());
-    rating[key] = value;
-    if (key === 'wear' && value >= WEAR_LOW_THRESHOLD) {
-        // keep existing text but it is not required
-    }
+    getRating(currentFileName())[key] = value;
     setVasValue(key, value);
-    updateSituationVisibility();
     updateStatistics();
     scheduleSave();
-}
-
-function updateSituationVisibility() {
-    const rating = getRating(currentFileName());
-    const show = rating.wear !== null && rating.wear < WEAR_LOW_THRESHOLD;
-    situationCard.hidden = !show;
-    if (!show) return;
-    if (situationText.value !== rating.situation) situationText.value = rating.situation || '';
 }
 
 function render() {
@@ -181,11 +170,7 @@ function render() {
     imageIndexEl.textContent = `${currentIndex + 1} / ${IMAGES.length}`;
     document.title = `服装選好評価 — ${PACKAGE_CONFIG.label || getSiteId()}`;
 
-    setVasValue('like', rating.like);
-    setVasValue('fit', rating.fit);
-    setVasValue('wear', rating.wear);
-    situationText.value = rating.situation || '';
-    updateSituationVisibility();
+    VAS_KEYS.forEach(key => setVasValue(key, rating[key]));
 
     btnPrev.disabled = currentIndex === 0;
     btnNext.textContent = currentIndex === IMAGES.length - 1 ? '完了を確認' : '次の画像 →';
@@ -202,20 +187,19 @@ function updateStatistics() {
     progressText.textContent = `${completeCount} / ${total} (${percent.toFixed(0)}%)`;
 }
 
-function validateCurrent() {
+function finalizeCurrentRating() {
     const rating = getRating(currentFileName());
-    const wear = displayValue(rating.wear);
-    if (wear < WEAR_LOW_THRESHOLD && !String(rating.situation || '').trim()) {
-        return '着用意欲が低い場合は、どういう場面なら着たいかを記入してください';
-    }
-    return '';
+    VAS_KEYS.forEach(key => {
+        if (rating[key] === null) rating[key] = DEFAULT_VAS_VALUE;
+    });
+    rating.confirmed = true;
 }
 
 function setupEventListeners() {
     if (listenersBound) return;
     listenersBound = true;
 
-    Object.keys(vasEls).forEach(key => {
+    VAS_KEYS.forEach(key => {
         const track = vasEls[key].querySelector('.vas-track');
         track.addEventListener('pointerdown', event => {
             event.preventDefault();
@@ -241,15 +225,9 @@ function setupEventListeners() {
             event.preventDefault();
             rating[key] = Math.max(0, Math.min(100, next));
             setVasValue(key, rating[key]);
-            updateSituationVisibility();
             updateStatistics();
             scheduleSave();
         });
-    });
-
-    situationText.addEventListener('input', () => {
-        getRating(currentFileName()).situation = situationText.value;
-        scheduleSave();
     });
 
     btnPrev.addEventListener('click', () => {
@@ -260,17 +238,7 @@ function setupEventListeners() {
     });
 
     btnNext.addEventListener('click', () => {
-        const message = validateCurrent();
-        if (message) {
-            evalHintEl.textContent = message;
-            evalHintEl.hidden = false;
-            return;
-        }
-        getRating(currentFileName()).confirmed = true;
-        const rating = getRating(currentFileName());
-        if (rating.like === null) rating.like = 50;
-        if (rating.fit === null) rating.fit = 50;
-        if (rating.wear === null) rating.wear = 50;
+        finalizeCurrentRating();
         scheduleSave();
         updateStatistics();
         if (currentIndex < IMAGES.length - 1) {
@@ -297,15 +265,15 @@ function exportToCSV() {
     let csv = '\ufeff';
     csv += `Site,${getSiteId()}\n`;
     csv += `Label,${PACKAGE_CONFIG.label || ''}\n`;
-    csv += 'Filename,Like (0-100),Fit (0-100),WearDesire (0-100),WearSituation,Complete\n';
+    csv += 'Filename,Like (0-100),Fit (0-100),WearDaily (0-100),WearPure (0-100),Complete\n';
 
     IMAGES.forEach(img => {
         const rating = getRating(img.fileName);
         const like = rating.confirmed && rating.like !== null ? rating.like.toFixed(1) : '';
         const fit = rating.confirmed && rating.fit !== null ? rating.fit.toFixed(1) : '';
-        const wear = rating.confirmed && rating.wear !== null ? rating.wear.toFixed(1) : '';
-        const situation = String(rating.situation || '').replace(/"/g, '""');
-        csv += `"${img.fileName}",${like},${fit},${wear},"${situation}",${isComplete(rating) ? 'Yes' : 'No'}\n`;
+        const wearDaily = rating.confirmed && rating.wearDaily !== null ? rating.wearDaily.toFixed(1) : '';
+        const wearPure = rating.confirmed && rating.wearPure !== null ? rating.wearPure.toFixed(1) : '';
+        csv += `"${img.fileName}",${like},${fit},${wearDaily},${wearPure},${isComplete(rating) ? 'Yes' : 'No'}\n`;
     });
 
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
